@@ -89,9 +89,10 @@ function App() {
   };
 
   useEffect(() => {
-    // 初始检查登录状态
-    const checkAuth = () => {
+    // 初始通过 /api/auth/me 拉取登录状态
+    const checkAuth = async () => {
       setLoading(true);
+      await auth.bootstrap();
       updateAuthState();
       setLoading(false);
     };
