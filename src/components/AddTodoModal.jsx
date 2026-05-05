@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Modal, DatePicker, Input, App } from 'antd';
 import dayjs from 'dayjs';
-import { app } from '../utils/cloudbase';
-import auth from '../utils/auth';
-
-const db = app.database();
+import { api } from '../utils/api';
 
 /**
  * 添加待办事项弹窗组件
@@ -30,7 +27,6 @@ function AddTodoModal({ visible, onClose, onSuccess, defaultDate = dayjs() }) {
     }
   }, [visible, defaultDate]);
 
-  // 添加待办事项
   const handleAdd = async () => {
     if (!todoContent.trim()) {
       message.warning('请输入待办事项内容');
@@ -39,39 +35,24 @@ function AddTodoModal({ visible, onClose, onSuccess, defaultDate = dayjs() }) {
 
     setLoading(true);
     try {
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        message.error('用户未登录');
-        return;
-      }
-
-      const newTodoItem = {
-        taskId: Math.random().toString(36).slice(2),
-        content: todoContent,
-        completed: false,
-        userId: currentUser._id,
-        userName: currentUser.username,
-        createdAt: selectedDate.format('YYYY-MM-DD HH:mm:ss'),
-      };
-
-      await db.collection('todos').add(newTodoItem);
+      await api.post('/todos', {
+        content: todoContent.trim(),
+        taskDate: selectedDate.format('YYYY-MM-DD'),
+      });
 
       message.success('待办事项添加成功！');
 
-      // 清空表单
       setTodoContent('');
       setSelectedDate(dayjs());
 
-      // 调用成功回调
       if (onSuccess) {
         onSuccess(selectedDate);
       }
 
-      // 关闭弹窗
       onClose();
     } catch (error) {
       console.error('添加待办事项失败', error);
-      message.error('添加失败，请重试');
+      message.error(error?.message || '添加失败，请重试');
     } finally {
       setLoading(false);
     }

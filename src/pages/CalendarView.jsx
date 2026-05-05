@@ -5,11 +5,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { app } from '../utils/cloudbase';
-import auth from '../utils/auth';
+import { api } from '../utils/api';
 import AddTodoModal from '../components/AddTodoModal';
-
-const db = app.database();
 
 // 设置中文本地化
 dayjs.locale('zh-cn');
@@ -24,33 +21,13 @@ function CalendarView() {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [selectedDateForAdd, setSelectedDateForAdd] = useState(dayjs());
 
-  // 获取指定月份的待办事项
-  const fetchMonthTodos = useCallback(async date => {
+  const fetchMonthTodos = useCallback(async (date) => {
     try {
       setLoading(true);
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      // 获取当月第一天和最后一天
-      const startOfMonth = date.startOf('month').format('YYYY-MM-DD 00:00:00');
-      const endOfMonth = date.endOf('month').format('YYYY-MM-DD 23:59:59');
-
-      const res = await db
-        .collection('todos')
-        .where({
-          userId: currentUser._id,
-          createdAt: db.command.and([
-            db.command.gte(startOfMonth),
-            db.command.lte(endOfMonth),
-          ]),
-        })
-        .get();
-
-      console.log('查询到的待办事项:', res.data);
-      setTodos(res.data);
+      const from = date.startOf('month').format('YYYY-MM-DD');
+      const to = date.endOf('month').format('YYYY-MM-DD');
+      const data = await api.get(`/todos?from=${from}&to=${to}`);
+      setTodos(data || []);
     } catch (error) {
       console.error('获取月度待办事项失败', error);
     } finally {

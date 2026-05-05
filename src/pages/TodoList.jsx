@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { app } from '../utils/cloudbase';
+import { api } from '../utils/api';
 import dayjs from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,15 +8,12 @@ import {
   PencilIcon,
   ArrowLeftIcon,
 } from '@heroicons/react/24/outline';
-import auth from '../utils/auth';
 import { DatePicker, Input, App } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import AddTodoModal from '../components/AddTodoModal';
 import 'dayjs/locale/zh-cn';
 
 const { RangePicker } = DatePicker;
-
-const db = app.database();
 
 function TodoList() {
   const { message } = App.useApp();
@@ -63,45 +60,24 @@ function TodoList() {
     }
   }, [searchParams]);
 
-  // 获取待办事项列表
   const fetchTodos = useCallback(async () => {
     try {
       setLoading(true);
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      // 构建基本查询条件
-      const queryConditions = {
-        userId: currentUser._id,
-      };
-
-      // 如果日期范围有效，则添加日期查询条件
+      const params = new URLSearchParams();
       if (dateRange && dateRange[0] && dateRange[1]) {
-        const startDateTime = dateRange[0].format('YYYY-MM-DD 00:00:00');
-        const endDateTime = dateRange[1].format('YYYY-MM-DD 23:59:59');
-
-        queryConditions.createdAt = db.command.and([
-          db.command.gte(startDateTime),
-          db.command.lte(endDateTime),
-        ]);
+        params.set('from', dateRange[0].format('YYYY-MM-DD'));
+        params.set('to', dateRange[1].format('YYYY-MM-DD'));
       }
-
-      const res = await db
-        .collection('todos')
-        .where(queryConditions)
-        .orderBy('createdAt', 'desc')
-        .get();
-
-      setTodos(res.data);
+      const qs = params.toString();
+      const data = await api.get(`/todos${qs ? `?${qs}` : ''}`);
+      setTodos(data || []);
     } catch (error) {
       console.error('获取待办事项失败', error);
+      message.error(error?.message || '加载失败');
     } finally {
       setLoading(false);
     }
-  }, [dateRange]); // 依赖日期变化
+  }, [dateRange, message]);
 
   // 打开添加待办事项弹窗
   const handleAddTodo = () => {
@@ -123,57 +99,28 @@ function TodoList() {
     await fetchTodos();
   };
 
-  // 全部完成功能
-  const handleCompleteAll = async checked => {
+  const handleCompleteAll = async (checked) => {
     try {
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      // 根据选中状态确定要操作的任务
       const targetTodos = checked
-        ? todos.filter(todo => !todo.completed) // 如果是完成，则操作未完成的任务
-        : todos.filter(todo => todo.completed); // 如果是取消完成，则操作已完成的任务
+        ? todos.filter((t) => !t.completed)
+        : todos.filter((t) => t.completed);
 
       if (targetTodos.length === 0) {
-        const statusText = checked ? '未完成' : '已完成';
-        message.info(`当前没有${statusText}的任务`);
+        message.info(`当前没有${checked ? '未完成' : '已完成'}的任务`);
         return;
       }
 
-      // 批量更新任务状态
-      const updatePromises = targetTodos.map(todo =>
-        db
-          .collection('todos')
-          .where({
-            taskId: todo.taskId,
-            userId: currentUser._id,
-          })
-          .update({
-            completed: checked,
-          })
+      const ids = targetTodos.map((t) => t.taskId);
+      await api.post('/todos/bulk-complete', { ids, completed: checked });
+
+      setTodos((prev) =>
+        prev.map((t) => (ids.includes(t.taskId) ? { ...t, completed: checked } : t))
       );
 
-      await Promise.all(updatePromises);
-
-      // 更新本地状态
-      setTodos(prevTodos =>
-        prevTodos.map(todo => {
-          // 只更新目标任务的状态
-          if (targetTodos.some(t => t.taskId === todo.taskId)) {
-            return { ...todo, completed: checked };
-          }
-          return todo;
-        })
-      );
-
-      const actionText = checked ? '完成' : '取消完成';
-      message.success(`已${actionText} ${targetTodos.length} 项任务`);
+      message.success(`已${checked ? '完成' : '取消完成'} ${targetTodos.length} 项任务`);
     } catch (error) {
       console.error('批量更新任务状态失败', error);
-      message.error('操作失败，请重试');
+      message.error(error?.message || '操作失败，请重试');
     }
   };
 
@@ -192,57 +139,25 @@ function TodoList() {
     }
   };
 
-  // 更新待办事项完成状态
   const toggleTodo = async (id, completed) => {
     try {
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      await db
-        .collection('todos')
-        .where({
-          taskId: id,
-          userId: currentUser._id, // 确保只能操作自己的数据
-        })
-        .update({
-          completed: !completed,
-        });
-      // 更新状态
-      setTodos(prevTodos =>
-        prevTodos.map(todo =>
-          todo.taskId === id ? { ...todo, completed: !completed } : todo
-        )
+      await api.patch(`/todos/${id}`, { completed: !completed });
+      setTodos((prev) =>
+        prev.map((t) => (t.taskId === id ? { ...t, completed: !completed } : t))
       );
-      // await fetchTodos();
     } catch (error) {
       console.error('更新待办事项状态失败', error);
+      message.error(error?.message || '操作失败');
     }
   };
 
-  // 删除待办事项
-  const deleteTodo = async id => {
+  const deleteTodo = async (id) => {
     try {
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      await db
-        .collection('todos')
-        .where({
-          taskId: id,
-          userId: currentUser._id, // 确保只能删除自己的数据
-        })
-        .remove();
-      // await fetchTodos();
-      // 更新状态
-      setTodos(prevTodos => prevTodos.filter(todo => todo.taskId !== id));
+      await api.del(`/todos/${id}`);
+      setTodos((prev) => prev.filter((t) => t.taskId !== id));
     } catch (error) {
       console.error('删除待办事项失败', error);
+      message.error(error?.message || '删除失败');
     }
   };
 
@@ -252,40 +167,21 @@ function TodoList() {
     setEditingTodoText(todo.content);
   };
 
-  // --- 处理内容更新 ---
-  const handleUpdateTodoContent = async id => {
+  const handleUpdateTodoContent = async (id) => {
     if (!editingTodoText.trim()) {
-      // 如果内容为空，则直接删除该待办事项
       await deleteTodo(id);
       setEditingTodoId(null);
       return;
     }
     try {
-      const currentUser = auth.getCurrentUser();
-      if (!currentUser) {
-        console.error('用户未登录');
-        return;
-      }
-
-      await db
-        .collection('todos')
-        .where({
-          taskId: id,
-          userId: currentUser._id, // 确保只能修改自己的数据
-        })
-        .update({
-          content: editingTodoText,
-        });
-      setEditingTodoId(null); // 退出编辑模式
-      // await fetchTodos();
-      // 更新状态
-      setTodos(prevTodos =>
-        prevTodos.map(todo =>
-          todo.taskId === id ? { ...todo, content: editingTodoText } : todo
-        )
+      await api.patch(`/todos/${id}`, { content: editingTodoText.trim() });
+      setEditingTodoId(null);
+      setTodos((prev) =>
+        prev.map((t) => (t.taskId === id ? { ...t, content: editingTodoText.trim() } : t))
       );
     } catch (error) {
       console.error('更新待办内容失败', error);
+      message.error(error?.message || '更新失败');
     }
   };
 
