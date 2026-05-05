@@ -1,0 +1,8 @@
+name                   = "my-todo-list"
+compatibility_date     = "2025-05-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding       = "DB"
+database_name = "todo-list-db"
+database_id   = "56e172ca-4968-4424-ae5e-f93166d205ca"

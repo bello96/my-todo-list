@@ -31,3 +31,6 @@ dist-ssr
 .wrangler/
 .dev.vars
 wrangler.local.toml
+
+# Git Bash crash dumps (Windows)
+*.stackdump
