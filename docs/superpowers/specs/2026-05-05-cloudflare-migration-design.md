@@ -104,6 +104,8 @@ CREATE TABLE todos (
 CREATE INDEX idx_todos_user_date ON todos(user_id, task_date);
 ```
 
+> **D1 外键限制 note**：D1 对 `FOREIGN KEY ... ON DELETE CASCADE` 的强制执行因 SQLite/D1 默认的 `PRAGMA foreign_keys` 行为而**不保证生效**。本表声明 CASCADE 仅作语义文档之用。如未来要支持"注销账号"这种业务，需要在业务代码中显式 `DELETE FROM todos WHERE user_id=?`，不要依赖 CASCADE 自动清理。本期范围内不支持注销，无影响。
+
 ### 3.1 与旧模型的差异
 
 | 旧（CloudBase） | 新（D1） | 原因 |

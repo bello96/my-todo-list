@@ -420,7 +420,7 @@ git commit -m "chore: vite.config.js 清理 CloudBase 配置并加 /api dev prox
 ls
 ```
 
-预期看到：`functions/`（暂无，M2 创建）、`migrations/`、`src/`、`wrangler.toml`、`package.json`、`vite.config.js` 等。**不应该再有** `cloudfunctions/`、`cloudbaserc.json`、`rules/` 等。
+预期看到：`functions/`（暂无，M2 创建）、`migrations/`、`src/`、`wrangler.toml`、`package.json`、`vite.config.js` 等。**不应该再有** `cloudfunctions/`、`rules/` 等。`cloudbaserc.json` 与 `src/utils/cloudbase.js` 暂时保留（M3 才删，避免中间状态 build 失败）。
 
 - [ ] **Step 2: 验证远程 D1 schema**
 
