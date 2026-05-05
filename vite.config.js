@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { functionsPlugin } from './dev/vite-plugin-functions.js';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    functionsPlugin({
+      schemaFile: 'migrations/0001_init.sql',
+      dbPath: '.wrangler/state-test/dev.sqlite',
+    }),
+  ],
   base: './',
   build: {
     rollupOptions: {
@@ -22,8 +29,5 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    proxy: {
-      '/api': 'http://127.0.0.1:8788',
-    },
   },
 });
