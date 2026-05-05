@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     functionsPlugin({
       schemaFile: 'migrations/0001_init.sql',
-      dbPath: '.wrangler/state-test/dev.sqlite',
+      dbPath: process.env.FUNCTIONS_DB_PATH || '.wrangler/state-test/dev.sqlite',
     }),
   ],
   base: './',

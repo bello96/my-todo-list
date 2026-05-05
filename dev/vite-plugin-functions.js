@@ -218,7 +218,9 @@ export function functionsPlugin(options = {}) {
     },
     configureServer(server) {
       // 初始化本地 D1 + 加载 .dev.vars
-      const dbFullPath = path.resolve(rootDir, opts.dbPath);
+      const dbFullPath = opts.dbPath === ':memory:'
+        ? ':memory:'
+        : path.resolve(rootDir, opts.dbPath);
       const d1 = createLocalD1(dbFullPath);
       const schemaPath = path.resolve(rootDir, opts.schemaFile);
       if (existsSync(schemaPath)) {
