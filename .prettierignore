@@ -1,0 +1,14 @@
+# 构建产物
+dist/
+build/
+out/
+
+# 依赖
+node_modules/
+
+# 配置文件
+.env
+*.min.js
+
+# Markdown 或其他不想格式化的文件
+README.md
