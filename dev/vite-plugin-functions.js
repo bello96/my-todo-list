@@ -302,9 +302,13 @@ export function functionsPlugin(options = {}) {
           response.headers.forEach((v, k) => {
             // node ServerResponse Set-Cookie 要用数组
             if (k.toLowerCase() === 'set-cookie') {
+              // dev 模式 http://127.0.0.1 下浏览器/curl 不发送 Secure cookie，
+              // 剥掉 Secure flag 以让登录 cookie 在本地能发回服务端。
+              // 生产 (Cloudflare Pages) 走 HTTPS，functions 自身仍然带 Secure。
+              const localSafe = v.replace(/;\s*Secure/gi, '');
               const existing = res.getHeader('Set-Cookie');
               const arr = Array.isArray(existing) ? existing : (existing ? [existing] : []);
-              arr.push(v);
+              arr.push(localSafe);
               res.setHeader('Set-Cookie', arr);
             } else {
               res.setHeader(k, v);
