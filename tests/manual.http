@@ -1,0 +1,73 @@
+@base = http://127.0.0.1:5173
+
+### 注册（首次）
+POST {{base}}/api/auth/register
+Content-Type: application/json
+
+{ "username": "alice", "password": "secret123" }
+
+### 注册重复用户名（应该 409）
+POST {{base}}/api/auth/register
+Content-Type: application/json
+
+{ "username": "alice", "password": "secret123" }
+
+### 注册参数错误（应该 400）
+POST {{base}}/api/auth/register
+Content-Type: application/json
+
+{ "username": "ab", "password": "x" }
+
+### 登录成功
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "alice", "password": "secret123" }
+
+### 登录密码错（应该 401 INVALID_CREDENTIALS）
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "alice", "password": "wrong" }
+
+### 当前用户
+GET {{base}}/api/auth/me
+
+### 列表（无筛选）
+GET {{base}}/api/todos
+
+### 列表（按日期范围）
+GET {{base}}/api/todos?from=2026-05-01&to=2026-05-31
+
+### 新建
+POST {{base}}/api/todos
+Content-Type: application/json
+
+{ "content": "买菜", "taskDate": "2026-05-05" }
+
+### 更新（把上一步返回 id 填到 :id）
+PATCH {{base}}/api/todos/1
+Content-Type: application/json
+
+{ "completed": true }
+
+### 修改内容
+PATCH {{base}}/api/todos/1
+Content-Type: application/json
+
+{ "content": "买水果" }
+
+### 批量完成
+POST {{base}}/api/todos/bulk-complete
+Content-Type: application/json
+
+{ "ids": [1, 2], "completed": true }
+
+### 删除
+DELETE {{base}}/api/todos/1
+
+### 退出登录
+POST {{base}}/api/auth/logout
+
+### 退出后再访问 me（应该 401）
+GET {{base}}/api/auth/me
