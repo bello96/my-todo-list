@@ -1,253 +1,130 @@
-# CloudBase React 模板
+# my-todo-list
 
-基于 React、Vite 和腾讯云开发（CloudBase）的现代化 Web 应用模板，为开发者提供了快速构建全栈应用的能力。
+基于 Cloudflare 全栈技术栈的待办事项应用：日历视图 + 用户注册/登录 + 主题切换。
 
+在线访问：<https://todo.dengjiabei.cn/>
 
-[![Powered by CloudBase](https://7463-tcb-advanced-a656fc-1257967285.tcb.qcloud.la/mcp/powered-by-cloudbase-badge.svg)](https://github.com/TencentCloudBase/CloudBase-AI-ToolKit)  
+## 技术栈
 
-> 本项目基于 [**CloudBase AI ToolKit**](https://github.com/TencentCloudBase/CloudBase-AI-ToolKit) 开发，通过AI提示词和 MCP 协议+云开发，让开发更智能、更高效，支持AI生成全栈代码、一键部署至腾讯云开发（免服务器）、智能日志修复。
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React 19 + Vite + React Router 6 (HashRouter) + Tailwind CSS + DaisyUI + Ant Design + Framer Motion |
+| API | Cloudflare Pages Functions（文件路由），全部位于 `functions/api/**/*.js` |
+| 数据 | Cloudflare D1（SQLite） |
+| 鉴权 | PBKDF2-SHA256 + JWT (HS256, 7 天) + httpOnly Secure SameSite=Lax Cookie |
+| 部署 | Cloudflare Pages（前端 + Functions 一体） |
 
-## 项目特点
+## 项目结构
 
-- 🚀 基于 Vite 构建，提供极速的开发体验
-- ⚛️ 使用 React 18 和 React Router 6 构建现代化 UI
-- 🎨 集成 Tailwind CSS 和 DaisyUI 组件库，快速构建漂亮的界面
-- 🔄 使用 Framer Motion 实现流畅的动画效果
-- 🎁 深度集成腾讯云开发 CloudBase，提供一站式后端云服务
+```
+my-todo-list/
+├── functions/                  # Cloudflare Pages Functions（生产 API）
+│   ├── _middleware.js          # 全局错误兜底（AppError → JSON / 其他 → 500 INTERNAL）
+│   ├── api/
+│   │   ├── auth/
+│   │   │   ├── register.js     # POST 注册
+│   │   │   ├── login.js        # POST 登录
+│   │   │   ├── logout.js       # POST 登出（清 cookie）
+│   │   │   └── me.js           # GET 当前用户
+│   │   └── todos/
+│   │       ├── _middleware.js  # JWT 鉴权链
+│   │       ├── index.js        # GET 列表 + POST 新建
+│   │       ├── [id].js         # PATCH + DELETE
+│   │       └── bulk-complete.js
+│   └── lib/                    # 通用库
+│       ├── auth.js             # 密码哈希 / JWT / Cookie
+│       ├── db.js               # 行序列化
+│       └── errors.js           # AppError + 错误工厂
+├── migrations/
+│   └── 0001_init.sql           # D1 schema（users + todos）
+├── dev/                        # 本地开发桥接（仅 dev，build 不打入）
+│   ├── d1-adapter.js           # Node 22 node:sqlite → D1Database 接口
+│   └── vite-plugin-functions.js  # 模拟 Pages Functions 路由
+├── src/                        # 前端
+│   ├── components/
+│   ├── pages/
+│   ├── utils/
+│   │   ├── api.js              # fetch 封装（credentials: include + 401 全局处理）
+│   │   └── auth.js             # 登录状态（无 localStorage，bootstrap 走 /api/auth/me）
+│   ├── App.jsx
+│   └── main.jsx
+├── tests/api/                  # vitest 集成测试（启子进程跑 vite dev）
+├── wrangler.toml               # name / compatibility_date / D1 binding 声明
+└── .dev.vars                   # 本地 secret（已 .gitignore）
+```
 
-## 项目架构
+## 本地开发
 
-### 前端架构
-
-- **框架**：React 18
-- **构建工具**：Vite
-- **路由**：React Router 6（使用 HashRouter）
-- **样式**：Tailwind CSS + DaisyUI
-- **动画**：Framer Motion
-
-### 云开发资源
-
-本项目使用了以下腾讯云开发（CloudBase）资源：
-
-- **身份认证**：用于用户登录和身份验证
-- **云数据库**：可用于存储应用数据
-- **云函数**：可用于实现业务逻辑
-- **云存储**：可用于存储文件
-- **静态网站托管**：用于部署前端应用
-
-## 开始使用
-
-### 前提条件
-
-- 安装 Node.js (版本 14 或更高)
-- 腾讯云开发账号 (可在[腾讯云开发官网](https://tcb.cloud.tencent.com/)注册)
-
-### 安装依赖
+依赖 Node 22（启用 `node:sqlite` 实验性内置模块）。
 
 ```bash
 npm install
+npm run dev           # 启动 http://localhost:5173，前后端一体
 ```
 
-### 配置云开发环境
+`vite-plugin-functions` 会在 dev 时拦截 `/api/*` 请求，转发到 `functions/api/**`，并用 `node:sqlite` 做 D1 模拟。第一次启动会自动建 schema 到 `.wrangler/state-test/dev.sqlite`。
 
-1. 打开 `src/utils/cloudbase.js` 文件
-2. 将 `ENV_ID` 变量的值修改为您的云开发环境 ID
-3. 将 `vite.config.js` 中的`https://envId-appid.tcloudbaseapp.com/` 替换为你的云开发环境静态托管默认域名，可以使用 MCP 来查询云开发环境静态托管默认域名
+`.dev.vars`（已 `.gitignore`）示例：
 
-### 本地开发
+```
+JWT_SECRET=至少32字符的随机串
+```
+
+> 为什么不用 `wrangler pages dev`？它依赖 workerd，在 Windows 11 上有 access violation 崩溃问题。我们的 vite 插件等价于"功能完整的本地 Pages Functions 跑环境"。
+
+## 测试
 
 ```bash
-npm run dev
+npm test
 ```
 
-### 构建生产版本
+`tests/setup/global.mjs` 会启动一个独立的 vite dev 子进程（端口 5174，DB 用 `:memory:`），跑完所有 fetch 风格集成测试再 tree-kill。
+
+## 部署
+
+### 一次性准备
+
+1. 安装并登录 wrangler：
+   ```bash
+   npx wrangler login
+   ```
+2. 创建 D1 数据库：
+   ```bash
+   npx wrangler d1 create todo-list-db
+   ```
+   把返回的 `database_id` 写进 `wrangler.toml`。
+3. 把 schema 推到远程：
+   ```bash
+   npm run db:apply:remote
+   ```
+4. 在 Cloudflare Pages 控制台为项目配置：
+   - **Settings → Variables and Secrets** 添加 `JWT_SECRET`（≥ 32 字符随机串）
+   - **Settings → Bindings** 添加 D1 binding：variable name `DB`，database `todo-list-db`，environment 至少包含 Production
+5. （可选）**Custom domains** 绑定自定义域名。
+
+### 后续每次部署
 
 ```bash
 npm run build
+npx wrangler pages deploy dist --project-name=my-todo-list --branch=main --commit-message="ASCII commit message"
 ```
 
-## 部署指南
+> `--commit-message` 必须 ASCII —— Cloudflare API 拒绝包含中文的 commit message（Windows GBK 控制台编码污染）。
+> 本地 git commit 仍然按中文规范写，与 deploy commit message 分离。
 
-### 部署到云开发静态网站托管
+## 安全说明
 
-1. 构建项目：`npm run build`
-2. 登录腾讯云开发控制台
-3. 进入您的环境 -> 静态网站托管
-4. 上传 `dist` 目录中的文件
+- **密码哈希**：PBKDF2-SHA256，**100,000 iterations**，16 字节随机 salt，32 字节 hash。Cloudflare Workers 的 Web Crypto API 硬限制 iter ≤ 100k；本地 Node 22 无此限制。配合 ≥ 10 字符的密码长度要求。
+- **JWT secret**：`signJwt`/`verifyJwt` 入口断言 `secret.length >= 32`，运行时 fail-fast，防止误配弱 secret。
+- **Cookie**：httpOnly、Secure（dev 转发剥离）、SameSite=Lax、Max-Age 7 天、Path=/。
+- **租户隔离**：所有 todo 读/写 SQL 都强制 `WHERE user_id = ?`。
+- **错误兜底**：`_middleware.js` 在非 `AppError` 情况下统一返 500 + `INTERNAL`，不向前端泄漏 stack。
 
-## 目录结构
+## 已知限制 / 后续计划
 
-```
-├── public/               # 静态资源
-├── src/
-│   ├── components/       # 可复用组件
-│   ├── pages/            # 页面组件
-│   ├── utils/            # 工具函数和云开发初始化
-│   ├── App.jsx           # 应用入口
-│   ├── main.jsx          # 渲染入口
-│   └── index.css         # 全局样式
-├── index.html            # HTML 模板
-├── tailwind.config.js    # Tailwind 配置
-├── postcss.config.js     # PostCSS 配置
-├── vite.config.js        # Vite 配置
-└── package.json          # 项目依赖
-```
-
-## 开始开发
-
-首页位于 `src/pages/HomePage.jsx`，是应用的默认入口页面。您可以根据项目需求自定义首页内容。
-
-
-## 路由系统说明
-
-本项目使用 React Router 6 作为路由系统，并采用 HashRouter 实现路由管理，这样可以更好地兼容静态网站托管服务，避免刷新页面时出现 404 错误。
-
-
-### 当前路由结构
-
-```jsx
-<Router>
-  <div className="flex flex-col min-h-screen">
-    <main className="flex-grow">
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        {/* 可以在这里添加新的路由 */}
-        <Route path="*" element={<HomePage />} />
-      </Routes>
-    </main>
-    <Footer />
-  </div>
-</Router>
-```
-
-### 如何添加新页面和路由
-
-1. 在 `src/pages` 目录下创建新页面组件，例如 `ProductPage.jsx`：
-
-```jsx
-import React from 'react';
-
-const ProductPage = () => {
-  return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-4">产品页面</h1>
-      <p>这是产品页面的内容</p>
-    </div>
-  );
-};
-
-export default ProductPage;
-```
-
-2. 在 `App.jsx` 中导入新页面并添加路由：
-
-```jsx
-import ProductPage from './pages/ProductPage';
-
-// 在 Routes 中添加新路由
-<Routes>
-  <Route path="/" element={<HomePage />} />
-  <Route path="/products" element={<ProductPage />} />
-  <Route path="*" element={<HomePage />} />
-</Routes>
-```
-
-3. 使用 Link 组件在页面中添加导航链接：
-
-```jsx
-import { Link } from 'react-router-dom';
-
-// 在页面中添加链接
-<Link to="/products" className="btn btn-primary">前往产品页面</Link>
-```
-
-### 使用路由参数
-
-对于需要动态参数的路由，可以使用参数路径：
-
-```jsx
-// 在 App.jsx 中定义带参数的路由
-<Route path="/product/:id" element={<ProductDetailPage />} />
-
-// 在 ProductDetailPage.jsx 中获取参数
-import { useParams } from 'react-router-dom';
-
-const ProductDetailPage = () => {
-  const { id } = useParams();
-  
-  return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-4">产品详情</h1>
-      <p>产品ID: {id}</p>
-    </div>
-  );
-};
-```
-
-### 路由导航
-
-除了使用 `<Link>` 组件，还可以使用编程式导航：
-
-```jsx
-import { useNavigate } from 'react-router-dom';
-
-const ComponentWithNavigation = () => {
-  const navigate = useNavigate();
-  
-  const handleClick = () => {
-    navigate('/products');
-    // 或者带参数: navigate('/product/123');
-    // 或者返回上一页: navigate(-1);
-  };
-  
-  return (
-    <button onClick={handleClick} className="btn btn-primary">
-      前往产品页面
-    </button>
-  );
-};
-```
-
-
-
-## 云开发功能说明
-
-### 初始化云开发
-
-本模板在 `src/utils/cloudbase.js` 中集中管理云开发的初始化和匿名登录功能。这个工具文件提供了云开发示例的获取/登录，调用云函数，云存储，云数据库等能力。
-
-### 使用云数据库、云函数、云存储
-
-通过 `src/utils/cloudbase.js` 访问云开发服务：
-
-```jsx
-import { app, ensureLogin } from '../utils/cloudbase';
-
-// 数据库操作
-await ensureLogin();
-const db = app.database();
-const result = await db.collection('users').get(); // 查询数据
-await db.collection('users').add({ name: 'test' }); // 添加数据
-// 调用云函数
-const funcResult = await app.callFunction({ name: 'getEnvInfo' });
-// 文件上传
-const uploadResult = await app.uploadFile({ cloudPath: 'test.jpg', filePath: file });
-// 数据模型
-const models = app.models;
-```
-
-### 重要说明
-
-1. 在使用前请先在 `src/utils/cloudbase.js` 文件中将 `ENV_ID` 变量的值修改为您的云开发环境 ID。
-2. 本模板默认使用匿名登录，这适合快速开发和测试，但在生产环境中可能需要更严格的身份验证。
-3. 所有云开发功能都通过初始化的应用实例直接调用，无需二次封装。
-4. `ensureLogin` 方法会检查当前登录状态，如果已登录则返回当前登录状态，否则会进行匿名登录。
-5. 匿名登录状态无法使用 `logout` 方法退出，只有其他登录方式（如微信登录、邮箱登录等）可以退出。
-6. 在使用数据库、云函数、云存储等功能前，请确保在云开发控制台中已创建相应的资源。
-
-## 贡献指南
-
-欢迎贡献代码、报告问题或提出改进建议！
+- 无 token revocation：被删账号 7 天内 JWT 仍可用（计划用 `users.token_version` 字段实现）。
+- 注册接口未限速：可被枚举用户名（建议在 Cloudflare WAF 加 IP rate limit）。
+- 测试缺 IDOR 写路径（PATCH/DELETE 别人 todo）、JWT 篡改、bulk-complete 越权用例。
 
 ## 许可证
 
