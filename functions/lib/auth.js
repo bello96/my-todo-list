@@ -70,7 +70,14 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+function assertSecret(secret) {
+  if (typeof secret !== 'string' || secret.length < 32) {
+    throw new Error('JWT_SECRET 配置无效：必须为长度 >= 32 的字符串');
+  }
+}
+
 export async function signJwt(payload, secret) {
+  assertSecret(secret);
   const now = Math.floor(Date.now() / 1000);
   return jwt.sign(
     {
@@ -83,6 +90,7 @@ export async function signJwt(payload, secret) {
 }
 
 export async function verifyJwt(token, secret) {
+  assertSecret(secret);
   try {
     const valid = await jwt.verify(token, secret);
     if (!valid) {

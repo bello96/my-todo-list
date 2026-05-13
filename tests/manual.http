@@ -4,13 +4,13 @@
 POST {{base}}/api/auth/register
 Content-Type: application/json
 
-{ "username": "alice", "password": "secret123" }
+{ "username": "alice", "password": "secret12345" }
 
 ### 注册重复用户名（应该 409）
 POST {{base}}/api/auth/register
 Content-Type: application/json
 
-{ "username": "alice", "password": "secret123" }
+{ "username": "alice", "password": "secret12345" }
 
 ### 注册参数错误（应该 400）
 POST {{base}}/api/auth/register
@@ -22,7 +22,7 @@ Content-Type: application/json
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "username": "alice", "password": "secret123" }
+{ "username": "alice", "password": "secret12345" }
 
 ### 登录密码错（应该 401 INVALID_CREDENTIALS）
 POST {{base}}/api/auth/login

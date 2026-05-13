@@ -11,7 +11,7 @@ describe('auth', () => {
 
   it('注册成功并自动登录（cookie 注入）', async () => {
     const username = uniqUser();
-    const r = await c.post('/api/auth/register', { username, password: 'secret123' });
+    const r = await c.post('/api/auth/register', { username, password: 'secret12345' });
     expect(r.status).toBe(201);
     expect(r.body.data.username).toBe(username);
     expect(c.getCookie()).toMatch(/^token=/);
@@ -23,8 +23,8 @@ describe('auth', () => {
 
   it('注册重复用户名返回 409 DUPLICATE', async () => {
     const username = uniqUser();
-    await c.post('/api/auth/register', { username, password: 'secret123' });
-    const r = await c.post('/api/auth/register', { username, password: 'secret123' });
+    await c.post('/api/auth/register', { username, password: 'secret12345' });
+    const r = await c.post('/api/auth/register', { username, password: 'secret12345' });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe('DUPLICATE');
   });
@@ -37,7 +37,7 @@ describe('auth', () => {
 
   it('密码错误返回 401 INVALID_CREDENTIALS（防枚举）', async () => {
     const username = uniqUser();
-    await c.post('/api/auth/register', { username, password: 'secret123' });
+    await c.post('/api/auth/register', { username, password: 'secret12345' });
     const c2 = makeClient();
     const r = await c2.post('/api/auth/login', { username, password: 'wrong' });
     expect(r.status).toBe(401);
@@ -52,7 +52,7 @@ describe('auth', () => {
 
   it('登出后访问 me 返回 401', async () => {
     const username = uniqUser();
-    await c.post('/api/auth/register', { username, password: 'secret123' });
+    await c.post('/api/auth/register', { username, password: 'secret12345' });
     const lo = await c.post('/api/auth/logout', {});
     expect(lo.status).toBe(204);
     c.clearCookie();

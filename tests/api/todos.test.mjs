@@ -5,7 +5,7 @@ const uniqUser = () => `u_${Math.random().toString(36).slice(2, 10)}`;
 
 async function loggedInClient() {
   const c = makeClient();
-  await c.post('/api/auth/register', { username: uniqUser(), password: 'secret123' });
+  await c.post('/api/auth/register', { username: uniqUser(), password: 'secret12345' });
   return c;
 }
 

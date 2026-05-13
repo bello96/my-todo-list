@@ -15,8 +15,8 @@ export const onRequestPost = async ({ request, env }) => {
   if (!username || typeof username !== 'string' || !USERNAME_RE.test(username)) {
     throw Errors.validation('用户名需 3-20 字符，仅字母/数字/下划线/连字符');
   }
-  if (!password || typeof password !== 'string' || password.length < 6 || password.length > 100) {
-    throw Errors.validation('密码长度需 6-100 字符');
+  if (!password || typeof password !== 'string' || password.length < 10 || password.length > 100) {
+    throw Errors.validation('密码长度需 10-100 字符');
   }
 
   const hash = await hashPassword(password);

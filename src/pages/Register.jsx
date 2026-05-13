@@ -49,8 +49,8 @@ function Register() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("密码至少需要6个字符");
+    if (formData.password.length < 10) {
+      setError("密码至少需要10个字符");
       return;
     }
 
@@ -143,7 +143,7 @@ function Register() {
                 type={showPassword ? "text" : "password"}
                 required
                 className="input input-bordered w-full pl-10 pr-10"
-                placeholder="密码（至少6个字符）"
+                placeholder="密码（至少10个字符）"
                 value={formData.password}
                 onChange={handleInputChange}
               />
