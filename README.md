@@ -1,6 +1,6 @@
 # my-todo-list
 
-基于 Cloudflare 全栈技术栈的待办事项应用：日历视图 + 用户注册/登录 + 主题切换。
+基于 Cloudflare 全栈技术栈的待办事项应用：日历视图 + 用户注册/登录。
 
 在线访问：<https://todo.dengjiabei.cn/>
 
@@ -8,7 +8,7 @@
 
 | 层 | 技术 |
 | --- | --- |
-| 前端 | React 19 + Vite + React Router 6 (HashRouter) + Tailwind CSS + DaisyUI + Ant Design + Framer Motion |
+| 前端 | React 19 + Vite + React Router 6 (HashRouter) + Tailwind CSS + DaisyUI + react-day-picker + react-hot-toast + Framer Motion |
 | API | Cloudflare Pages Functions（文件路由），全部位于 `functions/api/**/*.js` |
 | 数据 | Cloudflare D1（SQLite） |
 | 鉴权 | PBKDF2-SHA256 + JWT (HS256, 7 天) + httpOnly Secure SameSite=Lax Cookie |
@@ -37,18 +37,24 @@ my-todo-list/
 │       └── errors.js           # AppError + 错误工厂
 ├── migrations/
 │   └── 0001_init.sql           # D1 schema（users + todos）
-├── dev/                        # 本地开发桥接（仅 dev，build 不打入）
+├── dev/                        # 本地开发桥接（仅测试用，dev 默认走代理）
 │   ├── d1-adapter.js           # Node 22 node:sqlite → D1Database 接口
-│   └── vite-plugin-functions.js  # 模拟 Pages Functions 路由
+│   └── vite-plugin-functions.js  # 模拟 Pages Functions 路由（USE_LOCAL_FUNCTIONS=1 启用）
 ├── src/                        # 前端
 │   ├── components/
+│   │   ├── Header.jsx          # 顶部 nav（用户名 + 退出登录）
+│   │   └── AddTodoModal.jsx    # 添加待办弹窗（日期 popover 用 React Portal）
 │   ├── pages/
+│   │   ├── CalendarView.jsx    # 月视图（自定义 dayjs 网格）
+│   │   ├── TodoList.jsx        # 日期范围列表
+│   │   ├── Login.jsx
+│   │   └── Register.jsx
 │   ├── utils/
 │   │   ├── api.js              # fetch 封装（credentials: include + 401 全局处理）
 │   │   └── auth.js             # 登录状态（无 localStorage，bootstrap 走 /api/auth/me）
 │   ├── App.jsx
 │   └── main.jsx
-├── tests/api/                  # vitest 集成测试（启子进程跑 vite dev）
+├── tests/api/                  # vitest 集成测试（启子进程跑 vite dev + 本地 functions）
 ├── wrangler.toml               # name / compatibility_date / D1 binding 声明
 └── .dev.vars                   # 本地 secret（已 .gitignore）
 ```
@@ -58,11 +64,28 @@ my-todo-list/
 依赖 Node 22（启用 `node:sqlite` 实验性内置模块）。
 
 ```bash
-npm install
-npm run dev           # 启动 http://localhost:5173，前后端一体
+pnpm install
+pnpm dev           # 启动 http://localhost:5173，前端走本地，/api/* 反代到生产
 ```
 
-`vite-plugin-functions` 会在 dev 时拦截 `/api/*` 请求，转发到 `functions/api/**`，并用 `node:sqlite` 做 D1 模拟。第一次启动会自动建 schema 到 `.wrangler/state-test/dev.sqlite`。
+### Dev 默认模式：前端本地 + API 反代线上
+
+`vite.config.js` 配置了 `/api/*` 反代到 `https://todo.dengjiabei.cn`，本地登录态、todo 数据全部走生产 D1。`cookieDomainRewrite` + 剥离 `Secure` flag 让 cookie 在 `localhost` 也能保存。
+
+**好处**：调试 UI 时直接拿真实数据，不用本地维护数据库。
+**注意**：直接写生产数据，本地 bug 会污染线上 D1，调试要小心。
+
+### 切到本地 functions（隔离模式）
+
+```powershell
+$env:USE_LOCAL_FUNCTIONS='1'; pnpm dev
+```
+
+启用 `dev/vite-plugin-functions.js`：本地 `/api/*` 走 `functions/api/**` 代码 + `node:sqlite` 模拟 D1（数据存 `.wrangler/state-test/dev.sqlite`）。
+
+**适合**：调后端逻辑、测试 schema 迁移、离线开发。
+
+> 为什么不用 `wrangler pages dev`？它依赖 workerd，在 Windows 11 上有 access violation 崩溃问题。
 
 `.dev.vars`（已 `.gitignore`）示例：
 
@@ -70,15 +93,13 @@ npm run dev           # 启动 http://localhost:5173，前后端一体
 JWT_SECRET=至少32字符的随机串
 ```
 
-> 为什么不用 `wrangler pages dev`？它依赖 workerd，在 Windows 11 上有 access violation 崩溃问题。我们的 vite 插件等价于"功能完整的本地 Pages Functions 跑环境"。
-
 ## 测试
 
 ```bash
-npm test
+pnpm test
 ```
 
-`tests/setup/global.mjs` 会启动一个独立的 vite dev 子进程（端口 5174，DB 用 `:memory:`），跑完所有 fetch 风格集成测试再 tree-kill。
+`tests/setup/global.mjs` 启动 vite dev 子进程（端口 5174）并显式设 `USE_LOCAL_FUNCTIONS=1`，避免污染生产数据。DB 用 `:memory:` 全程内存隔离。
 
 ## 部署
 
@@ -95,7 +116,7 @@ npm test
    把返回的 `database_id` 写进 `wrangler.toml`。
 3. 把 schema 推到远程：
    ```bash
-   npm run db:apply:remote
+   pnpm run db:apply:remote
    ```
 4. 在 Cloudflare Pages 控制台为项目配置：
    - **Settings → Variables and Secrets** 添加 `JWT_SECRET`（≥ 32 字符随机串）
@@ -105,7 +126,7 @@ npm test
 ### 后续每次部署
 
 ```bash
-npm run build
+pnpm build
 npx wrangler pages deploy dist --project-name=my-todo-list --branch=main --commit-message="ASCII commit message"
 ```
 
@@ -125,6 +146,7 @@ npx wrangler pages deploy dist --project-name=my-todo-list --branch=main --commi
 - 无 token revocation：被删账号 7 天内 JWT 仍可用（计划用 `users.token_version` 字段实现）。
 - 注册接口未限速：可被枚举用户名（建议在 Cloudflare WAF 加 IP rate limit）。
 - 测试缺 IDOR 写路径（PATCH/DELETE 别人 todo）、JWT 篡改、bulk-complete 越权用例。
+- `functions/lib/db.js` 把 `task_date` 序列化成 `createdAt` 字段，语义错位（待修）。
 
 ## 许可证
 
