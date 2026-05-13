@@ -1,6 +1,6 @@
 import jwt from '@tsndr/cloudflare-worker-jwt';
 
-const PBKDF2_ITER = 600000;
+const PBKDF2_ITER = 100000;
 const SALT_LEN = 16;
 const HASH_LEN = 32;
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
