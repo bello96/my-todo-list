@@ -7,31 +7,32 @@ import {
   TrashIcon,
   PencilIcon,
   ArrowLeftIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { DatePicker, Input, App } from 'antd';
+import { DayPicker } from 'react-day-picker';
+import { zhCN } from 'react-day-picker/locale';
+import 'react-day-picker/dist/style.css';
+import toast from 'react-hot-toast';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import AddTodoModal from '../components/AddTodoModal';
 import 'dayjs/locale/zh-cn';
 
-const { RangePicker } = DatePicker;
-
 function TodoList() {
-  const { message } = App.useApp();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 添加待办事项弹窗相关状态
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [defaultDate, setDefaultDate] = useState(dayjs());
 
-  // 新增状态：用于跟踪正在编辑的待办事项
   const [editingTodoId, setEditingTodoId] = useState(null);
   const [editingTodoText, setEditingTodoText] = useState('');
   const editInputRef = useRef(null);
 
-  // 日期筛选相关状态 - 支持从URL参数读取日期
+  const [rangePickerOpen, setRangePickerOpen] = useState(false);
+  const rangePickerWrapRef = useRef(null);
+
   const initializeDateRange = () => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -45,7 +46,6 @@ function TodoList() {
 
   const [dateRange, setDateRange] = useState(initializeDateRange);
 
-  // 监听URL参数变化，更新日期范围
   useEffect(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -60,6 +60,24 @@ function TodoList() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!rangePickerOpen) {
+      return;
+    }
+    const onDocClick = (e) => {
+      if (
+        rangePickerWrapRef.current &&
+        !rangePickerWrapRef.current.contains(e.target)
+      ) {
+        setRangePickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+    };
+  }, [rangePickerOpen]);
+
   const fetchTodos = useCallback(async () => {
     try {
       setLoading(true);
@@ -73,15 +91,13 @@ function TodoList() {
       setTodos(data || []);
     } catch (error) {
       console.error('获取待办事项失败', error);
-      message.error(error?.message || '加载失败');
+      toast.error(error?.message || '加载失败');
     } finally {
       setLoading(false);
     }
-  }, [dateRange, message]);
+  }, [dateRange]);
 
-  // 打开添加待办事项弹窗
   const handleAddTodo = () => {
-    // 如果路由有日期且日期不是历史日期则取路由的日期
     const dateParam = searchParams.get('date');
     setDefaultDate(
       dateParam && !dayjs(dateParam).isBefore(dayjs(), 'day')
@@ -91,11 +107,8 @@ function TodoList() {
     setIsAddModalVisible(true);
   };
 
-  // 添加成功回调
   const handleAddSuccess = async (selectedDate) => {
-    // 重置路由日期为新增的日期
     setDateRange([selectedDate.startOf('day'), selectedDate.endOf('day')]);
-    // 重新查询数据以保持日期筛选一致
     await fetchTodos();
   };
 
@@ -106,7 +119,7 @@ function TodoList() {
         : todos.filter((t) => t.completed);
 
       if (targetTodos.length === 0) {
-        message.info(`当前没有${checked ? '未完成' : '已完成'}的任务`);
+        toast(`当前没有${checked ? '未完成' : '已完成'}的任务`, { icon: 'ℹ️' });
         return;
       }
 
@@ -114,40 +127,51 @@ function TodoList() {
       await api.post('/todos/bulk-complete', { ids, completed: checked });
 
       setTodos((prev) =>
-        prev.map((t) => (ids.includes(t.taskId) ? { ...t, completed: checked } : t))
+        prev.map((t) =>
+          ids.includes(t.taskId) ? { ...t, completed: checked } : t
+        )
       );
 
-      message.success(`已${checked ? '完成' : '取消完成'} ${targetTodos.length} 项任务`);
+      toast.success(
+        `已${checked ? '完成' : '取消完成'} ${targetTodos.length} 项任务`
+      );
     } catch (error) {
       console.error('批量更新任务状态失败', error);
-      message.error(error?.message || '操作失败，请重试');
+      toast.error(error?.message || '操作失败，请重试');
     }
   };
 
-  // 检查是否所有任务都已完成
   const isAllCompleted =
-    todos.length > 0 && todos.every(todo => todo.completed);
-  const hasIncompleteTodos = todos.some(todo => !todo.completed);
+    todos.length > 0 && todos.every((todo) => todo.completed);
+  const hasIncompleteTodos = todos.some((todo) => !todo.completed);
 
-  // 处理日期范围变化
-  const handleDateRangeChange = dates => {
-    if (dates && dates.length === 2) {
-      setDateRange([dates[0], dates[1]]);
+  const handleRangeSelect = (range) => {
+    if (range?.from && range?.to) {
+      setDateRange([dayjs(range.from), dayjs(range.to).endOf('day')]);
+      setRangePickerOpen(false);
+    } else if (range?.from) {
+      setDateRange([dayjs(range.from), null]);
     } else {
-      // 如果清空了日期选择,则查询的是全部
       setDateRange([null, null]);
     }
+  };
+
+  const clearDateRange = (e) => {
+    e.stopPropagation();
+    setDateRange([null, null]);
   };
 
   const toggleTodo = async (id, completed) => {
     try {
       await api.patch(`/todos/${id}`, { completed: !completed });
       setTodos((prev) =>
-        prev.map((t) => (t.taskId === id ? { ...t, completed: !completed } : t))
+        prev.map((t) =>
+          t.taskId === id ? { ...t, completed: !completed } : t
+        )
       );
     } catch (error) {
       console.error('更新待办事项状态失败', error);
-      message.error(error?.message || '操作失败');
+      toast.error(error?.message || '操作失败');
     }
   };
 
@@ -157,12 +181,11 @@ function TodoList() {
       setTodos((prev) => prev.filter((t) => t.taskId !== id));
     } catch (error) {
       console.error('删除待办事项失败', error);
-      message.error(error?.message || '删除失败');
+      toast.error(error?.message || '删除失败');
     }
   };
 
-  // --- 进入编辑模式 ---
-  const handleDoubleClick = todo => {
+  const handleDoubleClick = (todo) => {
     setEditingTodoId(todo.taskId);
     setEditingTodoText(todo.content);
   };
@@ -177,20 +200,21 @@ function TodoList() {
       await api.patch(`/todos/${id}`, { content: editingTodoText.trim() });
       setEditingTodoId(null);
       setTodos((prev) =>
-        prev.map((t) => (t.taskId === id ? { ...t, content: editingTodoText.trim() } : t))
+        prev.map((t) =>
+          t.taskId === id ? { ...t, content: editingTodoText.trim() } : t
+        )
       );
     } catch (error) {
       console.error('更新待办内容失败', error);
-      message.error(error?.message || '更新失败');
+      toast.error(error?.message || '更新失败');
     }
   };
 
-  // --- 新增功能：处理键盘事件（回车确认） ---
   const handleKeyDown = (e, id) => {
     if (e.key === 'Enter') {
       handleUpdateTodoContent(id);
     } else if (e.key === 'Escape') {
-      setEditingTodoId(null); // 按下Esc退出编辑
+      setEditingTodoId(null);
     }
   };
 
@@ -198,7 +222,6 @@ function TodoList() {
     fetchTodos();
   }, [fetchTodos]);
 
-  // 当进入编辑模式时，自动聚焦到输入框
   useEffect(() => {
     if (editingTodoId && editInputRef.current) {
       editInputRef.current.focus();
@@ -215,6 +238,15 @@ function TodoList() {
       </div>
     );
   }
+
+  const rangeLabel =
+    dateRange[0] && dateRange[1]
+      ? `${dateRange[0].format('YYYY-MM-DD')} ~ ${dateRange[1].format('YYYY-MM-DD')}`
+      : dateRange[0]
+        ? `${dateRange[0].format('YYYY-MM-DD')} ~ ...`
+        : '选择日期范围';
+
+  const hasRange = dateRange[0] || dateRange[1];
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-base-200 py-10">
@@ -239,7 +271,6 @@ function TodoList() {
           <span></span>
         </motion.div>
 
-        {/* 日期范围筛选组件 */}
         <motion.div
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
@@ -256,14 +287,39 @@ function TodoList() {
                   {searchParams.get('date') ? (
                     <span>{dateRange[0].format('YYYY-MM-DD')}</span>
                   ) : (
-                    <RangePicker
-                      value={dateRange}
-                      onChange={handleDateRangeChange}
-                      format="YYYY-MM-DD"
-                      placeholder={['开始时间', '结束时间']}
-                      className="w-60"
-                      allowClear
-                    />
+                    <div className="relative" ref={rangePickerWrapRef}>
+                      <button
+                        type="button"
+                        onClick={() => setRangePickerOpen((v) => !v)}
+                        className="input input-bordered w-64 text-left pr-10"
+                      >
+                        {rangeLabel}
+                      </button>
+                      {hasRange && (
+                        <button
+                          type="button"
+                          onClick={clearDateRange}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-base-300 rounded"
+                          aria-label="清空"
+                        >
+                          <XMarkIcon className="h-4 w-4 text-base-content/60" />
+                        </button>
+                      )}
+                      {rangePickerOpen && (
+                        <div className="absolute z-20 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2">
+                          <DayPicker
+                            mode="range"
+                            locale={zhCN}
+                            selected={{
+                              from: dateRange[0]?.toDate(),
+                              to: dateRange[1]?.toDate(),
+                            }}
+                            onSelect={handleRangeSelect}
+                            showOutsideDays
+                          />
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -276,20 +332,18 @@ function TodoList() {
           </div>
         </motion.div>
 
-        {/* 操作按钮区域 */}
         <motion.div
           className="flex justify-between items-center mb-8"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0, duration: 0.1 }}
         >
-          {/* 全部完成多选框 */}
           <div className="flex items-center">
             <input
               type="checkbox"
               id="completeAll"
               checked={isAllCompleted}
-              onChange={e => handleCompleteAll(e.target.checked)}
+              onChange={(e) => handleCompleteAll(e.target.checked)}
               disabled={todos.length === 0}
               className="checkbox checkbox-primary mr-2"
             />
@@ -303,18 +357,16 @@ function TodoList() {
             >
               全部完成{' '}
               {hasIncompleteTodos &&
-                `(${todos.filter(todo => !todo.completed).length}项未完成)`}
+                `(${todos.filter((todo) => !todo.completed).length}项未完成)`}
             </label>
           </div>
 
-          {/* 添加按钮 */}
           <button onClick={handleAddTodo} className="btn btn-primary shadow-md">
             <PlusIcon className="h-6 w-6" />
             <span className="ml-2">新增待办</span>
           </button>
         </motion.div>
 
-        {/* 添加待办事项弹窗 */}
         <AddTodoModal
           visible={isAddModalVisible}
           onClose={() => setIsAddModalVisible(false)}
@@ -324,7 +376,7 @@ function TodoList() {
 
         <div className="space-y-4">
           <AnimatePresence>
-            {todos.map(todo => (
+            {todos.map((todo) => (
               <motion.div
                 key={todo.taskId}
                 layout
@@ -347,9 +399,9 @@ function TodoList() {
                         ref={editInputRef}
                         type="text"
                         value={editingTodoText}
-                        onChange={e => setEditingTodoText(e.target.value)}
+                        onChange={(e) => setEditingTodoText(e.target.value)}
                         onBlur={() => handleUpdateTodoContent(todo.taskId)}
-                        onKeyDown={e => handleKeyDown(e, todo.taskId)}
+                        onKeyDown={(e) => handleKeyDown(e, todo.taskId)}
                         className="input input-bordered input-sm w-full"
                       />
                     ) : (
