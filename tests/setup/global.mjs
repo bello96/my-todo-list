@@ -30,6 +30,7 @@ export async function setup() {
       env: {
         ...process.env,
         FUNCTIONS_DB_PATH: ':memory:',
+        USE_LOCAL_FUNCTIONS: '1',
       },
     }
   );
